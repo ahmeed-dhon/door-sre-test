@@ -1,0 +1,132 @@
+pipeline {
+	agent {
+    	label 'master'
+  	}
+
+    environment {
+        AWS_ACCOUNT_ID = "12345678901"
+        AWS_REGION = "ap-southeast-3"
+        AWS_ECR_URL = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+        AWS_ECR_CREDS = "ecr:ap-southeast-3:ecr-credential"
+        SOURCE_REPO_URL = "git@github.com:ahmeed-dhon/door-test-sre.git"
+        BUILD_VERSION = "v0.0.1"
+    }
+
+  	stages {
+        stage ('Checkout') {
+            steps {
+                cleanWs()
+
+                // Clone source code repository into "dist" directory.
+                checkout scm: [
+                    $class: 'GitSCM',
+                    userRemoteConfigs: [
+                        [
+                            url: "${env.SOURCE_REPO_URL}",
+                            credentialsId: "${env.gitCredential}"
+                        ]
+                    ],
+                    branches: [
+                        [
+                            name: "*/master"
+                        ]
+                    ],
+                    extensions: [
+                        [
+                            $class: 'RelativeTargetDirectory',
+                            relativeTargetDir: 'dist'
+                        ]
+                    ]
+                ],
+                poll: false
+            }
+        }
+  
+        stage ('Docker Linter for golang') {
+            steps {
+                sh """
+                    cd ${env.WORKSPACE}/dist
+                    docker run --rm -v ${env.WORKSPACE}/dist/golang-service:/root/ -i projectatomic/dockerfile-lint dockerfile_lint --dockerfile Dockerfile
+                """
+            }
+        }
+
+        stage ('Docker Linter for nodejs') {
+            steps {
+                sh """
+                    cd ${env.WORKSPACE}/dist
+                    docker run --rm -v ${env.WORKSPACE}/dist/nodejs-service:/root/ -i projectatomic/dockerfile-lint dockerfile_lint --dockerfile Dockerfile
+                """
+            }
+        }
+
+        stage("Build image golang") {
+            steps {
+                script {
+                    sh "`aws ecr get-login --region ap-southeast-3 --no-include-email`"
+                    dockerImage = docker.build("${env.AWS_ECR_URL}/golang-service:${env.BUILD_VERSION}", "${env.WORKSPACE}/dist/golang-service/Dockerfile")
+                }
+            }
+        }
+
+        stage("Build image nodejs") {
+            steps {
+                script {
+                    sh "`aws ecr get-login --region ap-southeast-3 --no-include-email`"
+                    dockerImage = docker.build("${env.AWS_ECR_URL}/nodejs-service:${env.BUILD_VERSION}", "${env.WORKSPACE}/dist/nodejs-service/Dockerfile")
+                }
+            }
+        }
+
+        stage("Push image golang") {
+            steps {
+                script {
+                    docker.withRegistry("https://${env.AWS_ECR_URL}/golang-service",, "${env.AWS_ECR_CREDS}") {
+                        dockerImage.push("${env.BUILD_VERSION}")
+                        dockerImage.push("latest")
+                    }
+                }
+            }
+        }
+
+        stage("Push image nodejs") {
+            steps {
+                script {
+                    docker.withRegistry("https://${env.AWS_ECR_URL}/nodejs-service",, "${env.AWS_ECR_CREDS}") {
+                        dockerImage.push("${env.BUILD_VERSION}")
+                        dockerImage.push("latest")
+                    }
+                }
+            }
+        }
+        
+        stage("Remove local image") {
+			steps {
+				echo "=== Delete the local images ==="
+				sh ("docker rmi -f ${env.AWS_ECR_URL}/golang-service:${env.BUILD_VERSION}")
+				sh ("docker rmi ${env.AWS_ECR_URL}/golang-service:latest")
+                sh ("docker rmi -f ${env.AWS_ECR_URL}/nodejs-service:${env.BUILD_VERSION}")
+				sh ("docker rmi ${env.AWS_ECR_URL}/nodejs-service:latest")
+			}
+        }
+
+        stage ('Deploy') {
+            steps {
+                // Deploy Helm chart.
+                sh """
+                    cd ${env.WORKSPACE}/dist/k8s-manifest/golang-service
+                    /usr/local/bin/helm upgrade --atomic --install --set image.tag=${env.BUILD_VERSION} golang-service . --namespace PROD
+                    cd ${env.WORKSPACE}/dist/k8s-manifest/nodejs-service
+                    /usr/local/bin/helm upgrade --atomic --install --set image.tag=${env.BUILD_VERSION} nodejs-service . --namespace PROD
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            // Clean workspace.
+            cleanWs()
+        }
+    }
+}

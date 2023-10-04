@@ -1,0 +1,64 @@
+# Default values for webapp-spa.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Name overrride.
+nameOverride: ""
+fullnameOverride: "nodejs-service"
+
+# Pod autoscaling.
+autoscaling:
+  enabled: false
+
+# Pod replica(s).
+replicaCount: 2
+
+# Container image.
+image:
+  registry: 12345678901.dkr.ecr.ap-southeast-3.amazonaws.com
+  repository: nodejs-service
+  pullPolicy: Always
+  tag: ""
+
+# Deployment strategy.
+deploymentStrategy:
+  type: RollingUpdate
+
+# Pod resources.
+resources:
+  limits:
+    memory: 150Mi
+  requests:
+    cpu: 150m
+    memory: 100Mi
+
+# Pod security.
+podSecurityContext:
+  fsGroup: 2000
+
+# Terminate grace period.
+terminationGracePeriodSeconds: 30
+
+# Service port.
+service:
+  type: NodePort
+  port: 5000
+
+# Ingress.
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/target-type: instance
+  rules:
+    - paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: nodejs-service-nodeport
+              port:
+                number: 5000
