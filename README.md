@@ -2,11 +2,12 @@
 
 - I don't have any prior experience to code using either Golang or Nodejs
 - The backend code was made by using online example from internet
-- The tools used for this test answer are Jenkins for CI/CD, and Helm to deploy to K8s
+- The cloud environment used for this assessment is AWS
+- The tools used for this assessment are Jenkins for CI/CD, and Helm to deploy to K8s
 
 ### golang-service
 - Code source: https://gobyexample.com/http-server
-- The binary that will be running inside the Docker container is made by using multi-stage build.
+- The binary that will be running inside the Docker container is build by using multi-stage build.
 - First, the binary is build by using Golang docker image as a builder
 - Then, the binary is copied to the Alpine Docker image that will run the binary
 - This is done to optimize the Docker image size, and to prevent any code (sensitive or not) to be included inside the Docker image.
@@ -15,10 +16,12 @@
 ### nodejs-service
 - Code source: ttps://www.tutorialsteacher.com/nodejs/create-nodejs-web-server
 - This one is quite straightforward, just copy the server.js file to the nodejs Docker image then run the nodejs server as is
+- The NodeJS service will run on port 5000
 
 ### Jenkinsfile
 - The CI/CD process is assumed to use Jenkins
 - The docker image repository will be using AWS ECR (the account number is just for example)
+- All of the credentials used in this part is already saved as Jenkins Environment Variable
 - Stages explanation
 	- `stage ('Checkout')` Jenkins will checkout the code repository and set the directory name as `dist`
 	- `stage ('Docker Linter for golang') ` and `stage ('Docker Linter for nodejs")` this stage will do basic docker linter to check any error inside the dockerfile

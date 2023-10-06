@@ -9,9 +9,9 @@ A Helm chart for golang-service.
 $ brew install helm
 ```
 
-2. Go to `k8s-manifests` directory.
+2. Go to `k8s-manifest` directory.
 ```sh
-$ cd k8s-manifests
+$ cd k8s-manifest
 ```
 
 3. Deploy `golang-service`.
